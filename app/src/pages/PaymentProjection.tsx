@@ -419,7 +419,7 @@ export default function PaymentProjection() {
                     width={120}
                   />
                   <Tooltip
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Balance']}
+                    formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Balance']}
                     contentStyle={{
                       backgroundColor: 'hsl(var(--popover))',
                       border: '1px solid hsl(var(--border))',

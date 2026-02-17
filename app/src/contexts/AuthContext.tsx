@@ -1,50 +1,21 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react';
 import { User, Company, UserRole } from '@/types';
 
 interface AuthContextType {
   user: User | null;
   company: Company | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  loginWithMicrosoft: () => Promise<void>;
+  loginWithPhone: (phone: string, code: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock user data for demo
-const mockUsers: Record<string, { user: User; password: string }> = {
-  'fm@acme.com': {
-    password: 'demo',
-    user: {
-      id: '1',
-      email: 'fm@acme.com',
-      name: 'Sarah Chen',
-      role: 'finance_manager',
-      companyId: 'acme-corp',
-    },
-  },
-  'approver@acme.com': {
-    password: 'demo',
-    user: {
-      id: '2',
-      email: 'approver@acme.com',
-      name: 'Michael Ross',
-      role: 'approver',
-      companyId: 'acme-corp',
-    },
-  },
-  'viewer@acme.com': {
-    password: 'demo',
-    user: {
-      id: '3',
-      email: 'viewer@acme.com',
-      name: 'Emily Zhang',
-      role: 'viewer',
-      companyId: 'acme-corp',
-    },
-  },
-};
 
 const mockCompany: Company = {
   id: 'acme-corp',
@@ -87,26 +58,72 @@ const rolePermissions: Record<UserRole, string[]> = {
   ],
 };
 
+function mapSessionToUser(session: ReturnType<typeof useSession>['data']): User | null {
+  if (!session?.user) return null;
+  const u = session.user as { id: string; name?: string | null; email?: string | null; role?: string; companyId?: string };
+  return {
+    id: u.id || 'unknown',
+    email: u.email || '',
+    name: u.name || 'User',
+    role: (u.role as UserRole) || 'viewer',
+    companyId: u.companyId || 'default',
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { data: session, status } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
 
-  const login = useCallback(async (email: string, password: string) => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  // Sync NextAuth session to local state
+  useEffect(() => {
+    if (status === 'authenticated' && session) {
+      const mappedUser = mapSessionToUser(session);
+      setUser(mappedUser);
+      setCompany(mockCompany);
+    } else if (status === 'unauthenticated') {
+      setUser(null);
+      setCompany(null);
+    }
+  }, [session, status]);
 
-    const userData = mockUsers[email.toLowerCase()];
-    if (!userData || userData.password !== password) {
+  const login = useCallback(async (email: string, password: string) => {
+    const result = await nextAuthSignIn('demo-login', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    if (result?.error) {
       throw new Error('Invalid email or password');
     }
-
-    setUser(userData.user);
-    setCompany(mockCompany);
   }, []);
 
+  const loginWithGoogle = useCallback(async () => {
+    await nextAuthSignIn('google', { callbackUrl: '/' });
+  }, []);
+
+  const loginWithMicrosoft = useCallback(async () => {
+    await nextAuthSignIn('microsoft-entra-id', { callbackUrl: '/' });
+  }, []);
+
+  const loginWithPhone = useCallback(async (phone: string, code: string) => {
+    const result = await nextAuthSignIn('phone-otp', {
+      phone,
+      code,
+      redirect: false,
+    });
+
+    if (result?.error) {
+      throw new Error('Invalid verification code');
+    }
+  }, []);
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const logout = useCallback(() => {
-    setUser(null);
-    setCompany(null);
+    setIsLoggingOut(true);
+    nextAuthSignOut({ callbackUrl: '/' });
   }, []);
 
   const hasPermission = useCallback(
@@ -122,8 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         company,
-        isAuthenticated: !!user,
+        isAuthenticated: !!user || isLoggingOut,
+        isLoading: status === 'loading',
         login,
+        loginWithGoogle,
+        loginWithMicrosoft,
+        loginWithPhone,
         logout,
         hasPermission,
       }}
