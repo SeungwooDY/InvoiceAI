@@ -7,6 +7,7 @@ export interface User {
   name: string;
   role: UserRole;
   companyId: string;
+  organizationId: string | null;
   avatar?: string;
 }
 

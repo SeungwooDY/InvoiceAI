@@ -26,12 +26,13 @@ import VendorDetail from "../pages/VendorDetail";
 import Reconciliation from "../pages/Reconciliation";
 import Reports from "../pages/Reports";
 import Settings from "../pages/Settings";
+import Onboarding from "../pages/Onboarding";
 import NotFound from "../pages/NotFound";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
 
   if (isLoading) return null;
 
@@ -39,18 +40,32 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
+  // Redirect to onboarding if user has no organization
+  if (user && !user.organizationId) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return <>{children}</>;
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  // Determine where to send an authenticated user from /login
+  const authenticatedRedirect = user?.organizationId
+    ? "/app/dashboard"
+    : "/onboarding";
 
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route
         path="/login"
-        element={isLoading ? null : isAuthenticated ? <Navigate to="/app/dashboard" replace /> : <Login />}
+        element={isLoading ? null : isAuthenticated ? <Navigate to={authenticatedRedirect} replace /> : <Login />}
+      />
+      <Route
+        path="/onboarding"
+        element={isLoading ? null : !isAuthenticated ? <Navigate to="/login" replace /> : <Onboarding />}
       />
       <Route
         path="/app"

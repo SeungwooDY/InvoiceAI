@@ -13,15 +13,10 @@ interface AuthContextType {
   loginWithPhone: (phone: string, code: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const mockCompany: Company = {
-  id: 'acme-corp',
-  name: 'Acme Corporation',
-  baseCurrency: 'USD',
-};
 
 // Permission matrix
 const rolePermissions: Record<UserRole, string[]> = {
@@ -60,18 +55,26 @@ const rolePermissions: Record<UserRole, string[]> = {
 
 function mapSessionToUser(session: ReturnType<typeof useSession>['data']): User | null {
   if (!session?.user) return null;
-  const u = session.user as { id: string; name?: string | null; email?: string | null; role?: string; companyId?: string };
+  const u = session.user as {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    role?: string;
+    companyId?: string;
+    organizationId?: string | null;
+  };
   return {
     id: u.id || 'unknown',
     email: u.email || '',
     name: u.name || 'User',
     role: (u.role as UserRole) || 'viewer',
-    companyId: u.companyId || 'default',
+    companyId: u.companyId || u.organizationId || 'default',
+    organizationId: u.organizationId || null,
   };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
 
@@ -80,7 +83,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (status === 'authenticated' && session) {
       const mappedUser = mapSessionToUser(session);
       setUser(mappedUser);
-      setCompany(mockCompany);
+
+      // Set company from organization if available
+      if (mappedUser?.organizationId) {
+        setCompany({
+          id: mappedUser.organizationId,
+          name: '', // Will be populated from org data
+          baseCurrency: 'USD',
+        });
+      } else {
+        setCompany(null);
+      }
     } else if (status === 'unauthenticated') {
       setUser(null);
       setCompany(null);
@@ -100,11 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
-    await nextAuthSignIn('google', { callbackUrl: '/' });
+    await nextAuthSignIn('google', { callbackUrl: '/app/dashboard' });
   }, []);
 
   const loginWithMicrosoft = useCallback(async () => {
-    await nextAuthSignIn('microsoft-entra-id', { callbackUrl: '/' });
+    await nextAuthSignIn('microsoft-entra-id', { callbackUrl: '/app/dashboard' });
   }, []);
 
   const loginWithPhone = useCallback(async (phone: string, code: string) => {
@@ -125,6 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoggingOut(true);
     nextAuthSignOut({ callbackUrl: '/' });
   }, []);
+
+  const refreshSession = useCallback(async () => {
+    await update();
+  }, [update]);
 
   const hasPermission = useCallback(
     (permission: string) => {
@@ -147,6 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithPhone,
         logout,
         hasPermission,
+        refreshSession,
       }}
     >
       {children}

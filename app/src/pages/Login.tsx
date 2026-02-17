@@ -5,16 +5,24 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Building2, AlertCircle, Sparkles, Phone, Mail, Loader2 } from 'lucide-react';
+import { Building2, AlertCircle, Sparkles, Phone, Mail, Loader2, UserCheck, Eye } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type AuthMode = 'main' | 'phone-enter' | 'phone-verify';
+type SelectedRole = 'finance_manager' | 'approver' | 'viewer';
+
+const ROLE_OPTIONS: { value: SelectedRole; label: string; icon: typeof Building2; description: string }[] = [
+  { value: 'finance_manager', label: 'Finance Manager', icon: Building2, description: 'Create & manage an org' },
+  { value: 'approver', label: 'Approver', icon: UserCheck, description: 'Review & approve invoices' },
+  { value: 'viewer', label: 'Viewer', icon: Eye, description: 'Read-only access' },
+];
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<SelectedRole>('finance_manager');
   const { login, loginWithGoogle, loginWithMicrosoft, loginWithPhone } = useAuth();
   const navigate = useNavigate();
 
@@ -24,10 +32,16 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState('');
   const [otpSending, setOtpSending] = useState(false);
 
+  // Persist role selection before auth redirect
+  const saveSelectedRole = () => {
+    localStorage.setItem('payflow_selected_role', selectedRole);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    saveSelectedRole();
 
     try {
       await login(email, password);
@@ -41,6 +55,7 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     setError('');
+    saveSelectedRole();
     try {
       await loginWithGoogle();
     } catch {
@@ -50,6 +65,7 @@ export default function Login() {
 
   const handleMicrosoftLogin = async () => {
     setError('');
+    saveSelectedRole();
     try {
       await loginWithMicrosoft();
     } catch {
@@ -88,6 +104,7 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    saveSelectedRole();
 
     try {
       await loginWithPhone(phoneNumber, otpCode);
@@ -137,6 +154,40 @@ export default function Login() {
           <h1 className="text-3xl font-bold gradient-text">PayFlow</h1>
           <p className="text-muted-foreground">Invoice & Payables Management</p>
         </Link>
+
+        {/* Role Selector */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">I want to sign in as</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-2">
+              {ROLE_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                const isSelected = selectedRole === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setSelectedRole(option.value)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center ${
+                      isSelected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-transparent bg-secondary/50 hover:bg-secondary'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className={`text-xs font-medium leading-tight ${isSelected ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {ROLE_OPTIONS.find(r => r.value === selectedRole)?.description}
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Login Card */}
         <Card>
